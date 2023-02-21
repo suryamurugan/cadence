@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/uber/cadence/common/partition"
 	"sync/atomic"
 	"time"
 
@@ -94,6 +95,7 @@ type (
 		visibilityQueryValidator  *validator.VisibilityQueryValidator
 		searchAttributesValidator *validator.SearchAttributesValidator
 		throttleRetry             *backoff.ThrottleRetry
+		partitioner               partition.Partitioner
 	}
 
 	getHistoryContinuationToken struct {
@@ -550,6 +552,13 @@ func (wh *WorkflowHandler) PollForActivityTask(
 
 	if err := wh.versionChecker.ClientSupported(ctx, wh.config.EnableClientVersionCheck()); err != nil {
 		return nil, wh.error(err, scope)
+	}
+
+	isDrained, err := wh.partitioner.IsDrained(ctx, types.ZoneName(pollRequest.PollerZone))
+	if err != nil {
+		wh.GetLogger().Error("failure to detect drain state, failing open", tag.Error(err))
+	} else if isDrained {
+		return nil, wh.error(fmt.Errorf("zone drained"), scope)
 	}
 
 	if pollRequest == nil {

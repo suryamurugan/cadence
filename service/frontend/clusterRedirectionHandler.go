@@ -22,6 +22,8 @@ package frontend
 
 import (
 	"context"
+	"fmt"
+	"github.com/uber/cadence/common/partition"
 	"time"
 
 	"github.com/uber/cadence/common"
@@ -43,6 +45,7 @@ type (
 		redirectionPolicy  ClusterRedirectionPolicy
 		tokenSerializer    common.TaskTokenSerializer
 		frontendHandler    Handler
+		partitioner        partition.Partitioner
 	}
 )
 
@@ -522,6 +525,11 @@ func (handler *ClusterRedirectionHandlerImpl) QueryWorkflow(
 	defer func() {
 		handler.afterCall(recover(), scope, startTime, cluster, &retError)
 	}()
+
+	err = handler.ensureZoneNotDrained(ctx, request.GetDomain(), request.Zone)
+	if err != nil {
+		return nil, err
+	}
 
 	err = handler.redirectionPolicy.WithDomainNameRedirect(ctx, request.GetDomain(), apiName, func(targetDC string) error {
 		cluster = targetDC
@@ -1033,6 +1041,11 @@ func (handler *ClusterRedirectionHandlerImpl) SignalWithStartWorkflowExecution(
 		handler.afterCall(recover(), scope, startTime, cluster, &retError)
 	}()
 
+	err = handler.ensureZoneNotDrained(ctx, request.GetDomain(), request.Zone)
+	if err != nil {
+		return nil, err
+	}
+
 	err = handler.redirectionPolicy.WithDomainNameRedirect(ctx, request.GetDomain(), apiName, func(targetDC string) error {
 		cluster = targetDC
 		switch {
@@ -1063,6 +1076,11 @@ func (handler *ClusterRedirectionHandlerImpl) SignalWorkflowExecution(
 		handler.afterCall(recover(), scope, startTime, cluster, &retError)
 	}()
 
+	err = handler.ensureZoneNotDrained(ctx, request.GetDomain(), request.Zone)
+	if err != nil {
+		return err
+	}
+
 	err = handler.redirectionPolicy.WithDomainNameRedirect(ctx, request.GetDomain(), apiName, func(targetDC string) error {
 		cluster = targetDC
 		switch {
@@ -1091,6 +1109,11 @@ func (handler *ClusterRedirectionHandlerImpl) StartWorkflowExecution(
 	defer func() {
 		handler.afterCall(recover(), scope, startTime, cluster, &retError)
 	}()
+
+	err = handler.ensureZoneNotDrained(ctx, request.GetDomain(), request.Zone)
+	if err != nil {
+		return nil, err
+	}
 
 	err = handler.redirectionPolicy.WithDomainNameRedirect(ctx, request.GetDomain(), apiName, func(targetDC string) error {
 		cluster = targetDC
@@ -1121,6 +1144,11 @@ func (handler *ClusterRedirectionHandlerImpl) TerminateWorkflowExecution(
 	defer func() {
 		handler.afterCall(recover(), scope, startTime, cluster, &retError)
 	}()
+
+	err = handler.ensureZoneNotDrained(ctx, request.GetDomain(), request.Zone)
+	if err != nil {
+		return err
+	}
 
 	err = handler.redirectionPolicy.WithDomainNameRedirect(ctx, request.GetDomain(), apiName, func(targetDC string) error {
 		cluster = targetDC
@@ -1257,4 +1285,25 @@ func (handler *ClusterRedirectionHandlerImpl) afterCall(
 	if *retError != nil {
 		scope.IncCounter(metrics.CadenceDcRedirectionClientFailures)
 	}
+}
+
+func (handler *ClusterRedirectionHandlerImpl) ensureZoneNotDrained(
+	ctx context.Context,
+	domain string,
+	zone *string,
+) error {
+
+	// this is an optional param
+	if zone == nil {
+		return nil
+	}
+
+	isDrained, err := handler.partitioner.IsDrained(ctx, domain, types.ZoneName(*zone))
+	if err != nil {
+		return fmt.Errorf("failed to determine drain status: %w", err)
+	}
+	if isDrained {
+		return fmt.Errorf("zone is drained, not possible to receive signals further here", err)
+	}
+	return nil
 }

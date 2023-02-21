@@ -27,6 +27,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/uber/cadence/common/partition"
 	"math"
 	"sync"
 	"time"
@@ -90,6 +91,7 @@ type (
 		domainCache          cache.DomainCache
 		versionChecker       client.VersionChecker
 		membershipResolver   membership.Resolver
+		partitioner          partition.Partitioner
 	}
 )
 
@@ -279,6 +281,15 @@ func (e *matchingEngineImpl) AddDecisionTask(
 	taskListKind := request.GetTaskList().Kind
 	taskListType := persistence.TaskListTypeDecision
 
+	var zone *types.ZoneName
+	if request.PartitionConfig != nil {
+		z, err := e.partitioner.GetTaskZone(hCtx, domainID, *request.PartitionConfig)
+		if err != nil {
+			return false, fmt.Errorf("failed to get task zone: %w", err)
+		}
+		zone = z
+	}
+
 	e.emitInfoOrDebugLog(
 		domainID,
 		"Received AddDecisionTask",
@@ -291,7 +302,7 @@ func (e *matchingEngineImpl) AddDecisionTask(
 		tag.WorkflowTaskListKind(int32(request.GetTaskList().GetKind())),
 	)
 
-	taskList, err := newTaskListID(domainID, taskListName, taskListType)
+	taskList, err := e.newTaskListID(domainID, taskListName, taskListType, zone)
 	if err != nil {
 		return false, err
 	}
@@ -334,6 +345,15 @@ func (e *matchingEngineImpl) AddActivityTask(
 	taskListKind := request.GetTaskList().Kind
 	taskListType := persistence.TaskListTypeActivity
 
+	var zone *types.ZoneName
+	if request.PartitionConfig != nil {
+		z, err := e.partitioner.GetTaskZone(hCtx, domainID, request.PartitionConfig)
+		if err != nil {
+			return false, fmt.Errorf("failed to get task zone: %w", err)
+		}
+		zone = z
+	}
+
 	e.emitInfoOrDebugLog(
 		domainID,
 		"Received AddActivityTask",
@@ -346,7 +366,7 @@ func (e *matchingEngineImpl) AddActivityTask(
 		tag.WorkflowTaskListKind(int32(request.GetTaskList().GetKind())),
 	)
 
-	taskList, err := newTaskListID(domainID, taskListName, taskListType)
+	taskList, err := e.newTaskListID(domainID, taskListName, taskListType, zone)
 	if err != nil {
 		return false, err
 	}
@@ -380,6 +400,7 @@ func (e *matchingEngineImpl) PollForDecisionTask(
 ) (*types.MatchingPollForDecisionTaskResponse, error) {
 	domainID := req.GetDomainUUID()
 	pollerID := req.GetPollerID()
+	zone := types.ZoneName(req.PollerZone)
 	request := req.PollRequest
 	taskListName := request.GetTaskList().GetName()
 	taskListKind := request.GetTaskList().Kind
@@ -393,7 +414,7 @@ pollLoop:
 			return nil, err
 		}
 
-		taskList, err := newTaskListID(domainID, taskListName, persistence.TaskListTypeDecision)
+		taskList, err := e.newTaskListID(domainID, taskListName, persistence.TaskListTypeDecision, &zone)
 		if err != nil {
 			return nil, err
 		}
@@ -485,6 +506,7 @@ func (e *matchingEngineImpl) PollForActivityTask(
 	domainID := req.GetDomainUUID()
 	pollerID := req.GetPollerID()
 	request := req.PollRequest
+	zone := types.ZoneName(req.PollerZone)
 	taskListName := request.GetTaskList().GetName()
 	e.logger.Debug("Received PollForActivityTask",
 		tag.WorkflowTaskListName(taskListName),
@@ -498,7 +520,7 @@ pollLoop:
 			return nil, err
 		}
 
-		taskList, err := newTaskListID(domainID, taskListName, persistence.TaskListTypeActivity)
+		taskList, err := e.newTaskListID(domainID, taskListName, persistence.TaskListTypeActivity, &zone)
 		if err != nil {
 			return nil, err
 		}
@@ -606,7 +628,8 @@ func (e *matchingEngineImpl) QueryWorkflow(
 	domainID := queryRequest.GetDomainUUID()
 	taskListName := queryRequest.GetTaskList().GetName()
 	taskListKind := queryRequest.GetTaskList().Kind
-	taskList, err := newTaskListID(domainID, taskListName, persistence.TaskListTypeDecision)
+	zone := types.ZoneName("FIXME")
+	taskList, err := e.newTaskListID(domainID, taskListName, persistence.TaskListTypeDecision, &zone)
 	if err != nil {
 		return nil, err
 	}
@@ -693,8 +716,9 @@ func (e *matchingEngineImpl) CancelOutstandingPoll(
 	taskListName := request.GetTaskList().GetName()
 	taskListKind := request.GetTaskList().Kind
 	pollerID := request.GetPollerID()
+	fixme := types.ZoneName("fixme")
 
-	taskList, err := newTaskListID(domainID, taskListName, taskListType)
+	taskList, err := e.newTaskListID(domainID, taskListName, taskListType, &fixme)
 	if err != nil {
 		return err
 	}
@@ -719,8 +743,9 @@ func (e *matchingEngineImpl) DescribeTaskList(
 	}
 	taskListName := request.GetDescRequest().GetTaskList().GetName()
 	taskListKind := request.GetDescRequest().GetTaskList().Kind
+	fixme := types.ZoneName("fixme")
 
-	taskList, err := newTaskListID(domainID, taskListName, taskListType)
+	taskList, err := e.newTaskListID(domainID, taskListName, taskListType, &fixme)
 	if err != nil {
 		return nil, err
 	}
@@ -809,7 +834,9 @@ func (e *matchingEngineImpl) getAllPartitions(
 		return partitionKeys, err
 	}
 	taskList := request.GetTaskList()
-	taskListID, err := newTaskListID(domainID, taskList.GetName(), taskListType)
+	fixme := types.ZoneName("fixme")
+
+	taskListID, err := e.newTaskListID(domainID, taskList.GetName(), taskListType, &fixme)
 	if err != nil {
 		return partitionKeys, err
 	}
@@ -891,6 +918,54 @@ func (e *matchingEngineImpl) createPollForDecisionTaskResponse(
 	}
 	response.BacklogCountHint = task.backlogCountHint
 	return response
+}
+
+// newTaskListName returns a fully qualified task list name.
+// Fully qualified names contain additional metadata about task list
+// derived from their given name. The additional metadata only makes sense
+// when a task list has more than one partition. When there is more than
+// one partition for a user specified task list, each of the
+// individual partitions have an internal name of the form
+//
+//	/__cadence_sys/[original-name]/[partitionID]
+//
+// The name of the root partition is always the same as the user specified name. Rest of
+// the partitions follow the naming convention above. In addition, the task lists partitions
+// logically form a N-ary tree where N is configurable dynamically. The tree formation is an
+// optimization to allow for partitioned task lists to dispatch tasks with low latency when
+// throughput is low - See https://github.com/uber/cadence/issues/2098
+//
+// Returns error if the given name is non-compliant with the required format
+// for task list names
+func (e *matchingEngineImpl) newTaskListName(name string, domainID string, zone *types.ZoneName) (qualifiedTaskListName, error) {
+	tn := qualifiedTaskListName{
+		name:     name,
+		baseName: name,
+	}
+	if err := tn.init(); err != nil {
+		return qualifiedTaskListName{}, err
+	}
+	return tn, nil
+}
+
+// newTaskListID returns taskListID which uniquely identifies as task list
+func (e *matchingEngineImpl) newTaskListID(
+	domainID string,
+	taskListName string,
+	taskType int,
+	zone *types.ZoneName,
+) (*taskListID, error) {
+
+	name, err := e.newTaskListName(taskListName, domainID, zone)
+	if err != nil {
+		return nil, err
+	}
+
+	return &taskListID{
+		qualifiedTaskListName: name,
+		domainID:              domainID,
+		taskType:              taskType,
+	}, nil
 }
 
 // Populate the activity task response based on context and scheduled/started events.

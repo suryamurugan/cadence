@@ -23,6 +23,7 @@ package matching
 import (
 	"bytes"
 	"fmt"
+	"github.com/uber/cadence/common/types"
 	"strconv"
 	"strings"
 
@@ -42,36 +43,9 @@ type (
 		name      string // internal name of the tasks list
 		baseName  string // original name of the task list as specified by user
 		partition int    // partitionID of task list
+		zone      *types.ZoneName
 	}
 )
-
-// newTaskListName returns a fully qualified task list name.
-// Fully qualified names contain additional metadata about task list
-// derived from their given name. The additional metadata only makes sense
-// when a task list has more than one partition. When there is more than
-// one partition for a user specified task list, each of the
-// individual partitions have an internal name of the form
-//
-//	/__cadence_sys/[original-name]/[partitionID]
-//
-// The name of the root partition is always the same as the user specified name. Rest of
-// the partitions follow the naming convention above. In addition, the task lists partitions
-// logically form a N-ary tree where N is configurable dynamically. The tree formation is an
-// optimization to allow for partitioned task lists to dispatch tasks with low latency when
-// throughput is low - See https://github.com/uber/cadence/issues/2098
-//
-// Returns error if the given name is non-compliant with the required format
-// for task list names
-func newTaskListName(name string) (qualifiedTaskListName, error) {
-	tn := qualifiedTaskListName{
-		name:     name,
-		baseName: name,
-	}
-	if err := tn.init(); err != nil {
-		return qualifiedTaskListName{}, err
-	}
-	return tn, nil
-}
 
 // IsRoot returns true if this task list is a root partition
 func (tn *qualifiedTaskListName) IsRoot() bool {
@@ -122,24 +96,6 @@ func (tn *qualifiedTaskListName) init() error {
 	tn.partition = p
 	tn.baseName = tn.name[len(common.ReservedTaskListPrefix):suffixOff]
 	return nil
-}
-
-// newTaskListID returns taskListID which uniquely identifies as task list
-func newTaskListID(
-	domainID string,
-	taskListName string,
-	taskType int,
-) (*taskListID, error) {
-	name, err := newTaskListName(taskListName)
-	if err != nil {
-		return nil, err
-	}
-
-	return &taskListID{
-		qualifiedTaskListName: name,
-		domainID:              domainID,
-		taskType:              taskType,
-	}, nil
 }
 
 func (tid *taskListID) String() string {

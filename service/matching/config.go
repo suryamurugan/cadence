@@ -69,6 +69,8 @@ type (
 		EnableTaskInfoLogByDomainID dynamicconfig.BoolPropertyFnWithDomainIDFilter
 
 		ActivityTaskSyncMatchWaitTime dynamicconfig.DurationPropertyFnWithDomainFilter
+
+		ZonalTasklist dynamicconfig.BoolPropertyFnWithDomainIDFilter
 	}
 
 	forwarderConfig struct {

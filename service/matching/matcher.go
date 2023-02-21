@@ -23,6 +23,7 @@ package matching
 import (
 	"context"
 	"errors"
+	"github.com/uber/cadence/common/partition"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -46,6 +47,7 @@ type TaskMatcher struct {
 	// ratelimiter that limits the rate at which tasks can be dispatched to consumers
 	limiter *quotas.RateLimiter
 
+	partitioner   partition.Partitioner
 	fwdr          *Forwarder
 	scope         metrics.Scope // domain metric scope
 	numPartitions func() int    // number of task list partitions
