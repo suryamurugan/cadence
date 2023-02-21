@@ -50,7 +50,7 @@ func (db *cdb) InsertConfig(ctx context.Context, row *persistence.InternalConfig
 	return nil
 }
 
-func (db *cdb) SelectLatestConfig(ctx context.Context, rowType int) (*persistence.InternalConfigStoreEntry, error) {
+func (db *cdb) SelectLatestConfig(ctx context.Context, rowType persistence.ConfigType) (*persistence.InternalConfigStoreEntry, error) {
 	var version int64
 	var timestamp time.Time
 	var data []byte

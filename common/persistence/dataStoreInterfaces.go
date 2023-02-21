@@ -188,7 +188,7 @@ type (
 	}
 
 	InternalConfigStoreEntry struct {
-		RowType   int
+		RowType   ConfigType
 		Version   int64
 		Timestamp time.Time
 		Values    *DataBlob

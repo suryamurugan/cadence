@@ -77,7 +77,7 @@ func (m *configStoreManagerImpl) UpdateDynamicConfig(ctx context.Context, reques
 	}
 
 	entry := &InternalConfigStoreEntry{
-		RowType:   int(DynamicConfig),
+		RowType:   DynamicConfig,
 		Version:   request.Snapshot.Version,
 		Timestamp: time.Now(),
 		Values:    blob,
