@@ -222,6 +222,7 @@ type ConfigType int
 
 const (
 	DynamicConfig ConfigType = iota
+	ZonalConfig
 )
 
 type (
@@ -1356,6 +1357,7 @@ type (
 		Description string
 		OwnerEmail  string
 		Data        map[string]string
+		ZoneConfig  map[types.ZoneName]types.ZonePartition
 	}
 
 	// DomainConfig describes the domain configuration

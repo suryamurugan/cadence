@@ -3766,6 +3766,7 @@ type PollForActivityTaskRequest struct {
 	TaskList         *TaskList         `json:"taskList,omitempty"`
 	Identity         string            `json:"identity,omitempty"`
 	TaskListMetadata *TaskListMetadata `json:"taskListMetadata,omitempty"`
+	PollerZone       string
 }
 
 // GetDomain is an internal getter (TBD...)
@@ -4179,6 +4180,7 @@ type QueryWorkflowRequest struct {
 	Query                 *WorkflowQuery         `json:"query,omitempty"`
 	QueryRejectCondition  *QueryRejectCondition  `json:"queryRejectCondition,omitempty"`
 	QueryConsistencyLevel *QueryConsistencyLevel `json:"queryConsistencyLevel,omitempty"`
+	Zone                  *string
 }
 
 // GetDomain is an internal getter (TBD...)
@@ -5570,6 +5572,7 @@ type SignalWithStartWorkflowExecutionRequest struct {
 	Header                              *Header                `json:"header,omitempty"`
 	DelayStartSeconds                   *int32                 `json:"delayStartSeconds,omitempty"`
 	JitterStartSeconds                  *int32                 `json:"jitterStartSeconds,omitempty"`
+	Zone                                *string
 }
 
 // GetDomain is an internal getter (TBD...)
@@ -5677,6 +5680,7 @@ type SignalWorkflowExecutionRequest struct {
 	Identity          string             `json:"identity,omitempty"`
 	RequestID         string             `json:"requestId,omitempty"`
 	Control           []byte             `json:"control,omitempty"`
+	Zone              *string            `json:"zone,omitempty"`
 }
 
 // GetDomain is an internal getter (TBD...)
@@ -5960,6 +5964,7 @@ type StartWorkflowExecutionRequest struct {
 	Header                              *Header                `json:"header,omitempty"`
 	DelayStartSeconds                   *int32                 `json:"delayStartSeconds,omitempty"`
 	JitterStartSeconds                  *int32                 `json:"jitterStartSeconds,omitempty"`
+	Zone                                *string
 }
 
 // GetDomain is an internal getter (TBD...)
@@ -6310,6 +6315,7 @@ type TerminateWorkflowExecutionRequest struct {
 	Details             []byte             `json:"details,omitempty"`
 	Identity            string             `json:"identity,omitempty"`
 	FirstExecutionRunID string             `json:"first_execution_run_id,omitempty"`
+	Zone                *string
 }
 
 // GetDomain is an internal getter (TBD...)
