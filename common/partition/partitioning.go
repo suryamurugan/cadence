@@ -28,9 +28,11 @@ import (
 )
 
 type Partitioner interface {
-	// GetTaskZone gets where the task workflow should be executing
+	// GetTaskZone gets where the task workflow should be executing. Largely used by Matching 
+	// when determining which zone to place the tasks in
 	GetTaskZone(ctx context.Context, DomainID string, partitionKey types.PartitionConfig) (*types.ZoneName, error)
 	// IsDrained answers the question - is this particular zone drained, used by startWorkflow calls
+	// and similar sync frontend calls
 	IsDrained(ctx context.Context, Domain string, Zone types.ZoneName) (bool, error)
 	IsDrainedByDomainID(ctx context.Context, DomainID string, Zone types.ZoneName) (bool, error)
 }
